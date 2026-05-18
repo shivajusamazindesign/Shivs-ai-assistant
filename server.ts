@@ -127,11 +127,13 @@ Keep responses concise and sophisticated.`;
       console.log("Client connected to Live API");
       const ai = getGenAI();
       const session = await ai.live.connect({
-        model: "gemini-2.0-flash-exp",
+        model: "models/gemini-2.0-flash-exp",
         callbacks: {
           onmessage: (message: LiveServerMessage) => {
             // Log for debugging
-            console.log("Live API Message Received:", JSON.stringify(message).substring(0, 500));
+            if (message.serverContent?.modelTurn?.parts) {
+              console.log("Live API Model Turn Parts Received");
+            }
 
             const parts = message.serverContent?.modelTurn?.parts || [];
             parts.forEach(part => {
@@ -144,10 +146,11 @@ Keep responses concise and sophisticated.`;
             });
 
             // Catch user transcription
-            if (message.serverContent?.inputAudioTranscription?.text) {
+            if (message.serverContent?.inputTranscription?.text) {
+              console.log("User Transcription:", message.serverContent.inputTranscription.text);
               ws.send(JSON.stringify({ 
                 type: 'transcription', 
-                text: message.serverContent.inputAudioTranscription.text, 
+                text: message.serverContent.inputTranscription.text, 
                 role: 'user' 
               }));
             }

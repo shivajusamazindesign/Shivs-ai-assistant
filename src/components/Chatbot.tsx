@@ -26,8 +26,8 @@ function pcmToBase64(float32Array: Float32Array): string {
   return btoa(binary);
 }
 
-export default function Chatbot() {
-  const [isOpen, setIsOpen] = useState(false);
+export default function Chatbot({ isProminent = false }: { isProminent?: boolean }) {
+  const [isOpen, setIsOpen] = useState(true);
   const [isMinimized, setIsMinimized] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -55,7 +55,7 @@ export default function Chatbot() {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isOpen, isMinimized]);
+  }, [messages, isOpen, isMinimized, liveCaption, userCaption]);
 
   // Clean up on unmount
   useEffect(() => {
@@ -148,11 +148,15 @@ export default function Chatbot() {
       ws.onclose = () => {
         setIsVoiceMode(false);
         setIsListening(false);
+        setIsConnecting(false);
+        setLiveCaption('');
+        setUserCaption('');
         stream.getTracks().forEach(track => track.stop());
       };
 
       processor.onaudioprocess = (e) => {
-        if (ws.readyState === WebSocket.OPEN && isListening) {
+        // Use wsRef.current to avoid stale closure of 'ws'
+        if (ws.readyState === WebSocket.OPEN) {
           const inputData = e.inputBuffer.getChannelData(0);
           
           // Calculate volume for UI
@@ -209,14 +213,20 @@ export default function Chatbot() {
   };
 
   return (
-    <div id="chatbot-container" className="fixed bottom-6 right-6 z-50">
+    <div id="chatbot-container" className={cn(
+      "z-50 transition-all duration-500",
+      isProminent ? "relative w-full max-w-lg mx-auto" : "fixed bottom-6 right-6"
+    )}>
       <AnimatePresence>
         {isOpen && !isMinimized && (
           <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
-            className="mb-4 w-[420px] h-[600px] glass rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/30"
+            className={cn(
+              "mb-4 w-[420px] h-[600px] glass rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-white/30",
+              isProminent && "mx-auto"
+            )}
           >
             {/* Header */}
             <div className="p-4 border-b border-black/5 flex items-center justify-between bg-white/10">
@@ -250,18 +260,22 @@ export default function Chatbot() {
                 >
                   {isVoiceMode ? <Volume2 size={16} /> : <VolumeX size={16} />}
                 </button>
-                <button 
-                  onClick={() => setIsMinimized(true)}
-                  className="p-1.5 hover:bg-black/5 rounded-lg transition-colors"
-                >
-                  <Minimize2 size={16} className="text-black/60" />
-                </button>
-                <button 
-                  onClick={() => setIsOpen(false)}
-                  className="p-1.5 hover:bg-black/5 rounded-lg transition-colors"
-                >
-                  <X size={16} className="text-black/60" />
-                </button>
+                {!isProminent && (
+                  <>
+                    <button 
+                      onClick={() => setIsMinimized(true)}
+                      className="p-1.5 hover:bg-black/5 rounded-lg transition-colors"
+                    >
+                      <Minimize2 size={16} className="text-black/60" />
+                    </button>
+                    <button 
+                      onClick={() => setIsOpen(false)}
+                      className="p-1.5 hover:bg-black/5 rounded-lg transition-colors"
+                    >
+                      <X size={16} className="text-black/60" />
+                    </button>
+                  </>
+                )}
               </div>
             </div>
 
@@ -390,6 +404,8 @@ export default function Chatbot() {
       </AnimatePresence>
 
       <motion.button
+        animate={isProminent && !isOpen ? { y: [0, -10, 0] } : {}}
+        transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => {
@@ -397,23 +413,23 @@ export default function Chatbot() {
           setIsMinimized(false);
         }}
         className={cn(
-          "flex items-center gap-3 px-6 py-4 rounded-full shadow-2xl transition-all duration-500 relative",
+          "flex items-center gap-3 px-8 py-5 rounded-full shadow-2xl transition-all duration-500 relative ring-1 ring-black/5",
           isOpen && !isMinimized ? "opacity-0 pointer-events-none scale-0" : "opacity-100 scale-100",
           "bg-black text-white"
         )}
       >
         {isVoiceMode && (
           <motion.div 
-            animate={{ scale: [1, 1 + volume * 5, 1] }}
+            animate={{ scale: [1, 1 + volume * 5, 1], opacity: [0.3, 0.6, 0.3] }}
             transition={{ duration: 0.2, repeat: Infinity }}
-            className="absolute inset-0 bg-red-500/20 rounded-full -z-10"
+            className="absolute inset-0 bg-red-400 rounded-full -z-10"
           />
         )}
         <div className="relative">
-          <MessageSquare size={20} />
-          {isVoiceMode && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full" />}
+          <MessageSquare size={24} />
+          {isVoiceMode && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full shadow-sm" />}
         </div>
-        <span className="font-medium tracking-tight">Talk to Shiv</span>
+        <span className="font-medium tracking-tight text-lg">Talk to Shiv</span>
       </motion.button>
 
       {isOpen && isMinimized && (
