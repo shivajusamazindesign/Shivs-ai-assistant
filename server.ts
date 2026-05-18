@@ -75,8 +75,8 @@ async function startServer() {
     return genAI;
   };
 
-  const SYSTEM_INSTRUCTION = `You are Shiv, the founder of Sivnco Studio. You are a brand designer and artist based in Bengaluru.
-Your goal is to greet visitors and showcase your work.
+  const SYSTEM_INSTRUCTION = `You are Maya, the creative assistant for Shiv at Sivnco Studio. Shiv is a brand designer and artist based in Bengaluru.
+Your goal is to greet visitors, assist them warmly, and showcase Shiv's work on his behalf.
 
 IMPORTANT: When discussing a project, ALWAYS include its link and image if available in your response.
 Use standard Markdown for images: ![Title](imageUrl)
@@ -88,93 +88,118 @@ ${PROJECTS.map(p => `- ${p.title} (${p.category}): ${p.description}
   Image: ${p.imageUrl}`).join("\n")}
 
 Personality:
-- Professional yet warm and personal.
-- Rooted in Bengaluru's culture.
-- Passionate about "Work that speaks first".
+- You are a calm, highly competent, and warm female assistant.
+- You are professional yet personal, rooted in Bengaluru's culture.
+- You speak highly of Shiv and believe deeply in his "Work that speaks first" philosophy.
+- Do NOT pretend to be Shiv. You are Maya, his assistant.
 
-Services:
+Services Shiv offers:
 - Individual design deliverables, Brand Building, Partnerships, Art Commissions.
 
 If they ask for contact, point them to Instagram (@sivnco) or WhatsApp.
-Keep responses concise and sophisticated.`;
+Keep responses concise, elegant, and sophisticated.`;
 
   // Chat API
   app.post("/api/chat", async (req, res) => {
     try {
       const { messages } = req.body;
+      console.log("Chat Request received, messages count:", messages?.length);
       const ai = getGenAI();
       
-      const chat = ai.chats.create({
-        model: "gemini-3-flash-preview",
+      const formattedMessages = messages.map((m: any) => ({
+        role: m.role === 'assistant' ? 'model' : 'user',
+        parts: [{ text: m.content }]
+      }));
+
+      // Ensure the history starts with a 'user' message, as required by Gemini API
+      while (formattedMessages.length > 0 && formattedMessages[0].role !== 'user') {
+        formattedMessages.shift();
+      }
+
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview", 
+        contents: formattedMessages,
         config: {
-          systemInstruction: SYSTEM_INSTRUCTION,
+          systemInstruction: SYSTEM_INSTRUCTION + "\n\nCRITICAL: You MUST respond as Maya, Shiv's assistant. If the user asks about projects, you MUST show the specific project from the list below with its image and link. Never break persona.",
+          temperature: 0.7,
         },
       });
 
-      const lastMessage = messages[messages.length - 1].content;
-      const response = await chat.sendMessage({ message: lastMessage });
+      const responseText = response.text;
+      console.log("Chat Response Length:", responseText?.length, "Content:", responseText?.substring(0, 50));
       
-      res.json({ text: response.text });
-    } catch (error) {
-      console.error("Chat Error:", error);
-      res.status(500).json({ error: "Failed to communicate with AI" });
+      if (!responseText) {
+        console.error("Gemini returned empty text response");
+        throw new Error("Empty response from AI");
+      }
+      
+      res.json({ text: responseText });
+    } catch (error: any) {
+      console.error("Chat Error Detail:", error);
+      res.status(500).json({ error: error.message || "Failed to communicate with AI" });
     }
   });
 
   // Live API WebSocket
-  wss.on("connection", async (ws) => {
+  wss.on("connection", async (ws, req) => {
     try {
-      console.log("Client connected to Live API");
+      console.log(`Live API connection attempt from ${req.socket.remoteAddress}`);
       const ai = getGenAI();
+      
       const session = await ai.live.connect({
-        model: "models/gemini-2.0-flash-exp",
+        model: "gemini-3.1-flash-live-preview", 
         callbacks: {
           onmessage: (message: LiveServerMessage) => {
-            // Log for debugging
-            if (message.serverContent?.modelTurn?.parts) {
-              console.log("Live API Model Turn Parts Received");
-            }
-
             const parts = message.serverContent?.modelTurn?.parts || [];
             parts.forEach(part => {
               if (part.inlineData?.data) {
                 ws.send(JSON.stringify({ type: 'audio', data: part.inlineData.data }));
               }
-              if (part.text) {
-                ws.send(JSON.stringify({ type: 'transcription', text: part.text, role: 'assistant' }));
-              }
             });
 
-            // Catch user transcription
-            if (message.serverContent?.inputTranscription?.text) {
-              console.log("User Transcription:", message.serverContent.inputTranscription.text);
-              ws.send(JSON.stringify({ 
-                type: 'transcription', 
-                text: message.serverContent.inputTranscription.text, 
-                role: 'user' 
-              }));
+            // Catch transcriptions
+            const inputTranscription = message.serverContent?.inputTranscription?.text;
+            const outputTranscription = message.serverContent?.outputTranscription?.text;
+            
+            if (inputTranscription) {
+              ws.send(JSON.stringify({ type: 'transcription', text: inputTranscription, role: 'user' }));
+            }
+            if (outputTranscription) {
+              ws.send(JSON.stringify({ type: 'transcription', text: outputTranscription, role: 'assistant' }));
+            }
+            
+            if (message.serverContent?.turnComplete) {
+              ws.send(JSON.stringify({ type: 'turnComplete' }));
             }
             
             if (message.serverContent?.interrupted) {
+              console.log("AI Interrupted");
               ws.send(JSON.stringify({ type: 'interrupted' }));
             }
           },
+          onerror: (error) => {
+            console.error("Live API Session Error:", error);
+            ws.send(JSON.stringify({ type: 'error', text: error.message }));
+          }
         },
         config: {
           responseModalities: [Modality.AUDIO],
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Charon" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
           },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
-          systemInstruction: SYSTEM_INSTRUCTION + "\n\nNote: You are in a voice conversation. Keep responses extremely short and conversational.",
+          systemInstruction: SYSTEM_INSTRUCTION + "\n\nNote: You are in a real-time voice conversation. Speak like a friend - warm, approachable, and creative. Use natural filler words if appropriate. Keep it very brief.",
         },
       });
+
+      console.log("Live API Session Connected Successfully");
 
       ws.on("message", (data) => {
         try {
           const msg = JSON.parse(data.toString());
           if (msg.type === 'audio' && msg.data) {
+            // console.log("Received audio chunk length:", msg.data.length);
             session.sendRealtimeInput({
               audio: { data: msg.data, mimeType: "audio/pcm;rate=16000" },
             });
