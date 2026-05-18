@@ -1,0 +1,8 @@
+{
+  "name": "Sivnco",
+  "description": "Portfolio of H.P. Shivaraj - Brand Designer and Artist based in Bengaluru.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
