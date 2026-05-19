@@ -321,8 +321,8 @@ export default function Chatbot({ isProminent = false }: { isProminent?: boolean
 
   return (
     <div id="chatbot-container" className={cn(
-      "z-50 transition-all duration-500",
-      isProminent ? "w-full max-w-4xl h-screen md:h-[90vh] flex flex-col p-4" : "fixed bottom-6 right-6"
+      "z-50 transition-all duration-500 flex flex-col",
+      isProminent ? "w-full h-full max-w-5xl mx-auto p-0 sm:p-4 md:p-6" : "fixed bottom-6 right-6"
     )}>
       <AnimatePresence mode="wait">
         {isOpen && !isMinimized && (
@@ -331,8 +331,8 @@ export default function Chatbot({ isProminent = false }: { isProminent?: boolean
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               className={cn(
-                "w-full bg-[#f5f2ed] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-black/10 transition-all duration-500",
-                isProminent ? "h-full" : "mb-4 w-[420px] h-[600px] absolute bottom-full right-0"
+                "w-full bg-[#f5f2ed] shadow-2xl flex flex-col overflow-hidden transition-all duration-500",
+                isProminent ? "h-full border-0 sm:border sm:border-black/10 sm:rounded-2xl" : "mb-4 w-[min(calc(100vw-32px),420px)] h-[min(calc(100vh-120px),600px)] absolute bottom-full right-0 rounded-2xl border border-black/10"
               )}
             >
             {/* Header */}
